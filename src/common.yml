@@ -1,0 +1,108 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  tasks: 
+  - name: Set timezone 
+    timezone:
+      name: Asia/Tokyo
+  - name: Check locale
+    command: localectl status
+    register: localectl_result
+    check_mode: no
+    changed_when: false
+  - name: Set environment 
+    command: "{{ item }}"
+    loop:
+      - localectl set-locale LANG=ja_JP.utf8
+      - localectl set-keymap jp106
+      - hostnamectl set-hostname AlmaLinux
+    when: "'LANG=ja_JP.utf8' not in localectl_result.stdout"
+  - name: Development tools install
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - telnet
+        - wget
+        - perl
+        - perl-CGI
+        - vim
+        - bind-utils
+        - "@Development tools"
+  - name: Add alias vim
+    lineinfile: dest={{ item }} line="alias vi='vim'"
+    loop:
+      - /root/.bashrc
+  - name: Selinux disabled
+    selinux:
+       policy: targeted
+       state: disabled
+  - name: Disabled service firewalld
+    systemd:
+      name: firewalld
+      state: stopped
+      enabled: no
+  - name: Install ntpd(chrony) 
+    yum:
+      name: chrony
+  - name: copu chrony conf-file
+    copy:
+      src: vars/chrony.conf
+      dest: /etc/chrony.conf
+      mode: 644
+      owner: root
+      group: root
+  - name: Enable service ntpd(chrony)
+    systemd:
+      name: chronyd
+      state: started
+      enabled: yes
+  - name: Yum update
+    yum:
+       name: '*'
+       state: latest
+  - name: Install WebServer
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - httpd
+        - mod_ssl
+  - name: Checked Install PHP
+    yum:
+      list: php
+    register: result_php_installed
+  - name: Install PHP
+    command: dnf module install -y php:7.4
+    when: result_php_installed.results | selectattr("yumstate", "match", "installed") | list | length == 0
+  - name: Install PHP
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - php
+        - php-common
+        - php-gd
+        - php-pdo
+        - php-mysqlnd
+        - php-mbstring
+        - php-xml
+        - php-bcmath
+        - php-pear
+  - name: Install MariaDB
+    yum:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - mariadb
+        - mariadb-server
+  - name: Enable service web
+    systemd:
+      name: "{{ item }}"
+      state: started
+      enabled: yes
+    loop:
+      - httpd
+      - mariadb
