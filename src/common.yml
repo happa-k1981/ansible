@@ -98,11 +98,43 @@
       packages:
         - mariadb
         - mariadb-server
+        - python3-PyMySQL
   - name: Enable service web
     systemd:
       name: "{{ item }}"
       state: started
       enabled: yes
     loop:
-      - httpd
+      - httpd      
+      - php-fpm
       - mariadb
+  - name: root アカウントのパスワードを設定
+    mysql_user:
+      name: root
+      host: localhost
+      password: "rootpass"
+  - name: rootユーザのパスワード設定
+    no_log: true
+    mysql_user:
+      login_user: "root"
+      login_password: "rootpass"
+      name: "root"
+      password: "rootpass"
+      check_implicit_admin: yes
+      state: present
+  - name: データベースを作成
+    mysql_db:
+      login_user: root
+      login_password: "rootpass"
+      name: "db_name"
+      state: present
+  - name: MySQLユーザーを作成しすべての権限を与える
+    no_log: true
+    mysql_user:
+      login_user: root
+      login_password: "rootpass"
+      name: "db_user"
+      password: "db_pass"
+      priv: "db_name.*:ALL"
+      host: localhost
+      state: present
